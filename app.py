@@ -5,7 +5,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import Data_input as Dinput
 
-plt.rc("font", family="AppleGothic")
+# Windows용 한글 폰트 설정
+import platform
+if platform.system() == 'Windows':
+    plt.rcParams['font.family'] = ['Malgun Gothic', 'Microsoft YaHei', 'SimHei', 'sans-serif']
+    plt.rcParams['axes.unicode_minus'] = False
+else:
+    plt.rc("font", family="AppleGothic")
 
 # --------------------------------------------------------------------------
 # --- 1. 데이터베이스 연결 및 데이터 로딩 함수 ---
@@ -525,20 +531,88 @@ def analysis_page():
     st.write("")
     st.write("현재는 '차량 검색' 페이지에서 기본적인 분석 기능을 이용하실 수 있습니다.")
 
+def get_static_faq_data():
+    """정적 FAQ 데이터를 반환하는 함수"""
+    faq_data = [
+        # 현대 FAQ
+        {"category": "현대", "question": "중고차 구매 시 보증은 어떻게 되나요?", 
+         "answer": "중고차 구매 시 보증 기간은 차량의 연식과 주행거리에 따라 달라집니다. 일반적으로 3개월 또는 5,000km 중 먼저 도래하는 시점까지 엔진, 변속기 등 주요 부품에 대한 보증을 제공합니다."},
+        {"category": "현대", "question": "현대 중고차 인증 프로그램이 무엇인가요?", 
+         "answer": "현대 중고차 인증 프로그램은 100여 개 항목의 정밀 점검을 통과한 차량에만 부여되는 인증입니다. 인증된 차량은 품질보증서와 함께 판매되며, 추가 보증 혜택을 받을 수 있습니다."},
+        {"category": "현대", "question": "할부 구매 시 필요한 서류는 무엇인가요?", 
+         "answer": "할부 구매 시 필요한 서류는 신분증, 주민등록등본, 소득증명서(재직증명서, 급여명세서 등), 통장사본 등입니다. 개인사업자의 경우 사업자등록증과 소득금액증명원이 추가로 필요합니다."},
+        {"category": "현대", "question": "차량 교환이나 반품이 가능한가요?", 
+         "answer": "중고차 특성상 일반적으로 교환이나 반품은 어렵습니다. 다만, 구매 후 7일 이내에 계약서에 명시되지 않은 중대한 하자가 발견될 경우, 판매처와 협의를 통해 해결할 수 있습니다."},
+        {"category": "현대", "question": "차량 이력 조회는 어떻게 하나요?", 
+         "answer": "차량 이력은 자동차365, 카히스토리 등의 사이트나 보험개발원 차량이력조회 서비스를 통해 확인할 수 있습니다. 사고이력, 침수이력, 소유자 변경 내역 등을 확인할 수 있습니다."},
+        
+        # 기아 FAQ  
+        {"category": "기아", "question": "기아 중고차 품질보증 프로그램은 무엇인가요?", 
+         "answer": "기아 중고차 품질보증 프로그램은 전문 검수를 통과한 차량에 대해 품질을 보증하는 서비스입니다. 엔진, 변속기, 에어컨 등 핵심 부품에 대해 일정 기간 보증을 제공합니다."},
+        {"category": "기아", "question": "중고차 대출 금리는 어떻게 되나요?", 
+         "answer": "중고차 대출 금리는 개인의 신용등급, 차량의 연식과 가격, 대출 기간 등에 따라 결정됩니다. 일반적으로 연 4%~15% 수준이며, 은행권이 캐피털보다 금리가 낮은 편입니다."},
+        {"category": "기아", "question": "차량 점검은 언제 받아야 하나요?", 
+         "answer": "중고차 구매 후 즉시 전문 정비소에서 종합 점검을 받으시는 것을 권장합니다. 이후에는 제조사 권장 주기(보통 6개월 또는 1만km마다)에 따라 정기점검을 받으시면 됩니다."},
+        {"category": "기아", "question": "보험료는 얼마나 드나요?", 
+         "answer": "보험료는 차량 가격, 운전자 나이와 경력, 거주지역, 보험 가입 내역 등에 따라 결정됩니다. 일반적으로 차량 가격의 연 3~8% 정도이며, 여러 보험사에서 견적을 비교해보시는 것을 권장합니다."},
+        {"category": "기아", "question": "중고차 구매 시 주의사항은 무엇인가요?", 
+         "answer": "중고차 구매 시에는 차량 외관 및 내부 상태, 엔진룸 점검, 시운전, 각종 서류 확인이 필요합니다. 특히 사고이력, 침수이력, 주행거리 조작 여부를 반드시 확인하고, 가능하면 전문가와 함께 점검받으시기 바랍니다."},
+        
+        # 일반 FAQ
+        {"category": "일반", "question": "중고차 시세는 어떻게 확인하나요?", 
+         "answer": "중고차 시세는 KB차차차, 현대오토벨, SK엔카닷컴 등의 중고차 전문 사이트에서 확인할 수 있습니다. 동일 모델의 연식, 주행거리, 옵션 등을 비교하여 적정 시세를 파악하시기 바랍니다."},
+        {"category": "일반", "question": "자동차세는 언제 내나요?", 
+         "answer": "자동차세는 연 2회(6월, 12월) 납부하며, 차량 소유자에게 고지서가 발송됩니다. 중고차 구매 시 명의변경과 함께 자동차세 납부 의무도 함께 이전됩니다."},
+        {"category": "일반", "question": "명의변경은 언제까지 해야 하나요?", 
+         "answer": "자동차 매매 후 15일 이내에 명의변경을 완료해야 합니다. 명의변경을 하지 않으면 과태료가 부과되며, 사고 발생 시 책임 문제가 복잡해질 수 있습니다."},
+        {"category": "일반", "question": "중고차 리스와 할부의 차이점은 무엇인가요?", 
+         "answer": "할부는 차량 소유권이 구매자에게 있고 할부금을 완납하면 완전한 소유가 되지만, 리스는 리스회사가 소유권을 가지고 있으며 계약 만료 후 반납하거나 잔가로 구매할 수 있습니다. 리스는 월 납입금이 낮지만 주행거리 제한 등이 있습니다."}
+    ]
+    return pd.DataFrame(faq_data)
+
 def faq_page():
     """FAQ 페이지 UI 구성"""
     st.title("💬 자주 묻는 질문 (FAQ)")
     st.markdown("---")
-
-    faq_data = load_faq_data()
-
+    
+    # 검색 기능 추가
+    st.subheader("🔍 FAQ 검색")
+    search_term = st.text_input("궁금한 내용을 검색하세요", placeholder="예: 보증, 할부, 명의변경 등")
+    
+    # FAQ 데이터 로드
+    try:
+        # 먼저 DB에서 FAQ 데이터 로드 시도
+        faq_data = load_faq_data()
+        if faq_data.empty:
+            # DB에 데이터가 없으면 정적 데이터 사용
+            faq_data = get_static_faq_data()
+    except:
+        # DB 연결 실패 시 정적 데이터 사용
+        faq_data = get_static_faq_data()
+    
     if faq_data.empty:
         st.warning("FAQ 데이터가 없습니다.")
         return
-
+    
+    # 검색 필터링
+    if search_term:
+        mask = (faq_data['question'].str.contains(search_term, case=False, na=False) | 
+                faq_data['answer'].str.contains(search_term, case=False, na=False) |
+                faq_data['category'].str.contains(search_term, case=False, na=False))
+        filtered_faq = faq_data[mask]
+        
+        if filtered_faq.empty:
+            st.info(f"'{search_term}'에 대한 검색 결과가 없습니다.")
+            return
+        else:
+            st.info(f"'{search_term}'에 대한 검색 결과: {len(filtered_faq)}개")
+            faq_data = filtered_faq
+    
+    st.markdown("---")
+    
     # 카테고리별로 그룹화
     categories = faq_data['category'].unique()
-
+    
     for category in categories:
         st.subheader(f"📂 {category}")
         
