@@ -18,15 +18,9 @@ CREATE TABLE IF NOT EXISTS CarInfo (
     mileage INT,
     model_year INT,
     price INT NOT NULL,
+    -- 가성비 점수 컬럼 추가
+    value_score DOUBLE,
     FOREIGN KEY (car_name) REFERENCES CarName(car_name)
-);
-
-CREATE TABLE IF NOT EXISTS car_faq (
-    faq_id INT AUTO_INCREMENT PRIMARY KEY,
-    category VARCHAR(50) NOT NULL,
-    question TEXT NOT NULL,
-    answer TEXT NOT NULL,
-    site VARCHAR(100)
 );
 
 CREATE TABLE IF NOT EXISTS UsedCarData (

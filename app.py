@@ -145,10 +145,12 @@ def filter_car_data(data, brand=None, car_type=None, min_year=None, max_year=Non
     filtered_data = data.copy()
     
     if brand and brand != "전체":
-        filtered_data = filtered_data[filtered_data['브랜드'] == brand]
+        # 정확한 브랜드명으로 필터링
+        filtered_data = filtered_data[filtered_data['브랜드'].str.strip() == brand.strip()]
     
     if car_type and car_type != "전체":
-        filtered_data = filtered_data[filtered_data['차량종류'] == car_type]
+        # 정확한 차량종류로 필터링
+        filtered_data = filtered_data[filtered_data['차량종류'].str.strip() == car_type.strip()]
     
     if min_year:
         filtered_data = filtered_data[filtered_data['연식'] >= min_year]
@@ -195,22 +197,8 @@ def home_page():
     st.title("🚗 중고차 구매 고객을 위한 정보 제공 서비스")
     st.markdown("---")
     
-    # 데이터 개요
+    # 데이터 로드
     car_data = load_car_data()
-    if not car_data.empty:
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("총 차량 수", len(car_data))
-        
-        with col2:
-            st.metric("브랜드 수", car_data['브랜드'].nunique())
-        
-        with col3:
-            st.metric("평균 가격", f"{car_data['가격'].mean():.0f}만원")
-        
-        with col4:
-            st.metric("평균 주행거리", f"{car_data['주행거리'].mean():,.0f}km")
     
     # 자동차 거래 현황 분석
     try:
@@ -262,20 +250,41 @@ def home_page():
         
         st.markdown("---")
         
-        # 가성비 상위 10개 차량
-        # 점수 계산을 위해 전체 데이터 사용
-        all_cars_with_scores = calculate_value_score(car_data, car_data)
-        
-        df_unique = all_cars_with_scores.sort_values('value_score', ascending=False).drop_duplicates(subset='차종', keep='first')
-        top10 = df_unique.head(10)
-        
-        st.title("가성비 상위 10개 차량")
-        st.markdown("가성비 점수는 신차 가격 대비 중고차 가격, 연식, 주행 거리, 동일 모델 등록 대수(인기도)를 종합적으로 고려하여 계산되었습니다.")
-        st.dataframe(top10[['차량명', '가격', 'value_score']].rename(columns={
-            '차량명': '차량명',
-            '가격': '중고차 가격(만원)',
-            'value_score': '가성비 점수'
-        }), use_container_width=True, hide_index=True)
+        query_2 = """
+        SELECT
+        c.car_name AS car_name, 
+        c.car_brand, 
+        c.car_type, 
+        c.newcar_price, 
+        i.full_name, 
+        i.mileage, 
+        i.model_year, 
+        i.price
+        FROM CarName c
+        JOIN CarInfo i ON c.car_name = i.car_name;"""
+
+        # 가성비 상위 10개 차량 표시
+        if not car_data.empty:
+            car_data_with_score = calculate_value_score(car_data, car_data)
+            top10 = car_data_with_score.nlargest(10, 'value_score')
+            
+            st.header("🏆 가성비 상위 10개 차량")
+            st.markdown("가성비 점수는 신차 가격 대비 중고차 가격, 연식, 주행 거리, 동일 모델 등록 대수(인기도)를 종합적으로 고려하여 계산되었습니다.")
+            
+            # 순위와 함께 표시
+            display_data = top10[['차량명', '브랜드', '가격', '연식', '주행거리', 'value_score']].copy()
+            display_data['순위'] = range(1, len(display_data) + 1)
+            display_data = display_data[['순위', '차량명', '브랜드', '가격', '연식', '주행거리', 'value_score']]
+            
+            st.dataframe(display_data.rename(columns={
+                '순위': '순위',
+                '차량명': '차량명',
+                '브랜드': '브랜드',
+                '가격': '중고차 가격(만원)',
+                '연식': '연식',
+                '주행거리': '주행거리(km)',
+                'value_score': '가성비 점수'
+            }), use_container_width=True, hide_index=True)
         
     except Exception as e:
         st.error(f"데이터 분석 중 오류가 발생했습니다: {e}")
@@ -306,13 +315,17 @@ def search_page():
     brands = ["전체"] + sorted(car_data['브랜드'].unique().tolist())
     selected_brand = st.sidebar.selectbox("브랜드", brands)
     
-    # 차량종류 선택
+    # 차량종류 선택 (선택된 브랜드에 맞는 차량종류만 표시)
     if selected_brand != "전체":
-        available_types = car_data[car_data['브랜드'] == selected_brand]['차량종류'].unique()
+        brand_filtered_data = car_data[car_data['브랜드'].str.strip() == selected_brand.strip()]
+        available_types = brand_filtered_data['차량종류'].unique()
     else:
         available_types = car_data['차량종류'].unique()
     
-    car_types = ["전체"] + sorted(available_types.tolist())
+    # 차량종류 정렬 (경차, 승용차, SUV, 스포츠, 트럭 순)
+    type_order = ['경차', '승용차', 'SUV', '스포츠', '트럭']
+    available_types_sorted = [t for t in type_order if t in available_types] + [t for t in available_types if t not in type_order]
+    car_types = ["전체"] + available_types_sorted
     selected_type = st.sidebar.selectbox("차량종류", car_types)
     
     # 연식 범위
@@ -367,7 +380,9 @@ def search_page():
             )
             # 가성비 점수 계산 (전체 데이터를 기준으로)
             if not filtered_data.empty:
-                st.session_state.filtered_results = calculate_value_score(filtered_data, car_data)
+                results_with_score = calculate_value_score(filtered_data, car_data)
+                # 가성비 점수 순으로 정렬 (높은 순)
+                st.session_state.filtered_results = results_with_score.sort_values('value_score', ascending=False)
             else:
                 st.session_state.filtered_results = pd.DataFrame()
             st.session_state.page_number = 0
@@ -545,15 +560,13 @@ def main():
     )
     
     st.sidebar.title("메뉴")
-    page_options = ["홈", "차량 검색", "추가 기능", "FAQ"]
+    page_options = ["홈", "차량 검색", "FAQ"]
     selected_page = st.sidebar.radio("페이지를 선택하세요", page_options)
     
     if selected_page == "홈":
         home_page()
     elif selected_page == "차량 검색":
         search_page()
-    elif selected_page == "추가 기능":
-        analysis_page()
     elif selected_page == "FAQ":
         faq_page()
 

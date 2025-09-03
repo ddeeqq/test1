@@ -1,83 +1,78 @@
 import pandas as pd
 import numpy as np
+import os # 파일 존재 여부 확인을 위해 import
 
-def merge_car_data(car_file, name_file, output_file = "merged.csv"):
-
+def process_all_data():
     """
-    차량 정보와 기본 이름 데이터를 병합하여 merged.csv 생성
+    폴더에 있는 모든 차량 데이터 소스를 자동으로 찾아 병합하고 정제하여 
+    최종 'merged_clean.csv' 파일을 생성하는 전체 프로세스입니다.
     """
+    
+    # --- 1. 존재하는 모든 CSV 데이터 소스 찾아서 병합 ---
+    # 처리할 모든 데이터 파일 목록
+    all_files = ["kcar_cars.csv", "usedcar_data.csv", "AllCarData.csv"]
+    
+    # 현재 폴더에 실제로 존재하는 파일만 골라냅니다.
+    existing_files = [f for f in all_files if os.path.exists(f)]
+    
+    # 처리할 파일이 하나도 없으면 오류 메시지를 보여주고 종료합니다.
+    if not existing_files:
+        print("[ERROR] 처리할 데이터 파일이 없습니다. kcar_cars.csv, usedcar_data.csv 등을 확인해주세요.")
+        print("[INFO] KCar 데이터가 없다면 먼저 Crawling_data_KCar.py를 실행하여 kcar_cars.csv 파일을 생성해야 합니다.")
+        return
 
-    data1 = pd.read_csv(car_file)  # 차량명(풀네임), 연식, 주행거리, 가격
-    data2 = pd.read_csv(name_file, encoding="cp949")  # 차량브랜드, 차량명(기본 이름)
+    print(f"[INFO] 다음 파일들을 병합합니다: {existing_files}")
+    
 
-    # Create a new column for basic car name
-    data1["차종"] = None
+    df_list = [pd.read_csv(file, encoding='utf-8', encoding_errors='ignore') for file in existing_files]
+    merged_df = pd.concat(df_list, ignore_index=True)
+    
 
-    # data2의 기본 이름이 data1의 차량명에 포함되면 추가
-    for _, row in data2.iterrows():
-        nor_name = row["차종"] 
-        mask = data1["차량명"].str.contains(nor_name, na=False)
-        data1.loc[mask, "차종"] = nor_name
+    car_name_df = pd.read_csv("car_name.csv", encoding="cp949")
+    merged_df["차종"] = None
 
-    # 중복 제거
-    data1 = data1.drop_duplicates(subset=["차량명", "연식", "주행거리", "가격", "차종"])
+    for _, row in car_name_df.iterrows():
+        nor_name = row["차종"]
+        mask = merged_df["차량명"].str.contains(nor_name, na=False)
+        merged_df.loc[mask, "차종"] = nor_name
+    
 
-    data1.to_csv(output_file, index=False, encoding="utf-8-sig")
-    print(f"[INFO] 병합 완료 → {output_file}")
+    merged_df["연식"] = merged_df["연식"].astype(str).str.extract(r"(\d{2,4})").astype(float)
 
-
-
-def clean_merged_data(input_file="merged.csv", output_file="merged_clean.csv"):
-
-    """
-    merged.csv를 정제하여 merged_clean.csv 생성
-    """
-
-    data = pd.read_csv(input_file, encoding="cp949")
-
-    # 연식: 앞 2자리 숫자 추출 후 정수 변환
-    data["연식"] = data["연식"].astype(str).str.extract(r"(\d{2})").astype(float)
-
-    # 주행거리: ','와 'km' 제거 후 숫자로 변환
-    data["주행거리"] = (
-        data["주행거리"]
+    merged_df["주행거리"] = (
+        merged_df["주행거리"]
         .astype(str)
         .str.replace(",", "", regex=False)
         .str.replace("km", "", regex=False)
         .astype(float)
     )
 
-    # 가격 처리
     def clean_price(price_str):
         if pd.isna(price_str):
             return np.nan
-        price_str = str(price_str).strip()
-        # 첫 글자가 숫자가 아니면 NaN
-        if not price_str[0].isdigit():
-            return np.nan
-        # 공백 기준으로 첫 번째 값만
-        first_price = price_str.split()[0]
-        # ','와 '만원' 제거
-        first_price = first_price.replace(",", "").replace("만원", "")
+        price_str = str(price_str).strip().replace(",", "").replace("만원", "")
         try:
-            return int(first_price)
-        except:
+            return int(price_str)
+        except (ValueError, TypeError):
             return np.nan
 
-    # 가격 정리
-    data["가격"] = data["가격"].apply(clean_price)
+    merged_df["가격"] = merged_df["가격"].apply(clean_price)
+    
 
-    # NaN이 있는 행 제거
-    data = data.dropna(subset=["가격", "차종"])
+    final_df = merged_df.dropna(subset=["차량명", "연식", "주행거리", "가격", "차종"])
+    final_df = final_df.drop_duplicates(subset=["차량명", "연식", "주행거리", "가격", "차종"])
+    
 
-    # 결과 저장
-    data.to_csv(output_file, index=False, encoding="utf-8-sig")
-    print(f"[INFO] 정제 완료 → {output_file}")
+    final_df = final_df.reset_index(drop=True)
+    
 
-    return data
+    output_file = "merged_clean.csv"
+    final_df.to_csv(output_file, index=False, encoding="utf-8-sig")
+    print(f"[INFO] 모든 데이터 처리 완료! → {output_file}")
+    print(f"최종 데이터 개수: {len(final_df)}개")
+
 
 if __name__ == "__main__":
-    # 1️⃣ 차량 정보 크롤링 실행
-    merge_car_data("kcar_cars.csv", "car_name.csv", "merged.csv")
-    # 2️⃣ 병합된 데이터 정제 실행
-    clean_merged_data("merged.csv", "merged_clean.csv")
+    # 데이터 처리 전체 프로세스 실행
+    process_all_data()
+
